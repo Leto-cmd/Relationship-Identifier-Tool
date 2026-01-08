@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relationship Namer — Node-Based MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #ffffff;
+            color: #1a1a1a;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 380px;
+            background: #fafafa;
+            border-right: 1px solid #e0e0e0;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .sidebar h2 {
+            color: #1a1a1a;
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            border-bottom: 2px solid #1a1a1a;
+            padding-bottom: 8px;
+        }
+
+        .sidebar h3 {
+            color: #1a1a1a;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background: #ffffff;
+            overflow: hidden;
+            border-left: 1px solid #e0e0e0;
+        }
+
+        #graphCanvas {
+            width: 100%;
+            height: 100%;
+            cursor: default;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: #666;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: #ffffff;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            color: #1a1a1a;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #1a1a1a;
+        }
+
+        .button {
+            background: #1a1a1a;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        .button:hover {
+            background: #333;
+        }
+
+        .button:active {
+            background: #000;
+        }
+
+        .button.secondary {
+            background: #ffffff;
+            color: #1a1a1a;
+            border: 1px solid #1a1a1a;
+        }
+
+        .button.secondary:hover {
+            background: #f5f5f5;
+        }
+
+        .button.small {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            width: auto;
+        }
+
+        .error {
+            color: #d32f2f;
+            font-size: 0.85rem;
+            margin-top: 8px;
+        }
+
+        .info-box {
+            background: #f5f5f5;
+            border-left: 3px solid #1a1a1a;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: #666;
+        }
+
+        .node {
+            cursor: move;
+            user-select: none;
+        }
+
+        .node circle {
+            fill: #ffffff;
+            stroke: #1a1a1a;
+            stroke-width: 2;
+            transition: all 0.2s;
+        }
+
+        .node.selected circle {
+            fill: #1a1a1a;
+            stroke: #1a1a1a;
+            stroke-width: 3;
+        }
+
+        .node.selected text {
+            fill: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .node text {
+            fill: #1a1a1a;
+            font-size: 12px;
+            text-anchor: middle;
+            pointer-events: none;
+            font-weight: 500;
+        }
+
+        .edge {
+            stroke: #666;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .edge.parent-child {
+            stroke: #1a1a1a;
+            marker-end: url(#arrowhead);
+        }
+
+        .edge.spouse {
+            stroke: #666;
+            stroke-dasharray: 5,5;
+        }
+
+        .edge.incest {
+            stroke: #d32f2f;
+            stroke-width: 3;
+        }
+
+        .relationship-list {
+            list-style: none;
+            margin-top: 12px;
+        }
+
+        .relationship-item {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .relationship-item strong {
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .relationship-item .type {
+            color: #666;
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        .incest-warning {
+            background: #fff5f5;
+            border: 1px solid #d32f2f;
+            border-radius: 4px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+
+        .incest-warning h4 {
+            color: #d32f2f;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        .incest-warning p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .add-relationship-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .toolbar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 8px;
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .toolbar button {
+            padding: 8px 16px;
+            background: #ffffff;
+            border: 1px solid #d0d0d0;
+            color: #1a1a1a;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .toolbar button:hover {
+            background: #f5f5f5;
+            border-color: #1a1a1a;
+        }
+
+        .toolbar button.active {
+            background: #1a1a1a;
+            color: #ffffff;
+            border-color: #1a1a1a;
+        }
+
+
+        .selected-nodes {
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .selected-nodes .node-name {
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+
+        .selected-nodes .node-label {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .info-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 400px;
+            max-height: 600px;
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .info-panel.collapsed {
+            max-height: 60px;
+        }
+
+        .info-panel.collapsed .info-panel-content {
+            display: none;
+        }
+
+        .info-panel-header {
+            background: #1a1a1a;
+            color: #ffffff;
+            padding: 16px;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .info-panel-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .info-panel-toggle {
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+
+        .info-panel.collapsed .info-panel-toggle {
+            transform: rotate(180deg);
+        }
+
+        .info-panel-content {
+            padding: 20px;
+            max-height: 540px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .info-panel-content h4 {
+            color: #1a1a1a;
+            font-size: 1rem;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .info-panel-content h4:first-child {
+            margin-top: 0;
+        }
+
+        .info-panel-content p {
+            margin-bottom: 12px;
+            color: #666;
+        }
+
+        .info-panel-content ul {
+            margin-left: 20px;
+            margin-bottom: 12px;
+            color: #666;
+        }
+
+        .info-panel-content li {
+            margin-bottom: 6px;
+        }
+
+        .info-panel-content .author {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 0.85rem;
+            color: #999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <div>
+                <h2>Create Node</h2>
+                <form id="nodeForm">
+                    <div class="form-group">
+                        <label for="nodeName">Name</label>
+                        <input type="text" id="nodeName" placeholder="Enter name" required>
+                    </div>
+                    <button type="submit" class="button">Add Node</button>
+                    <div id="nodeError" class="error" style="display: none;"></div>
+                </form>
+            </div>
+
+            <div id="selectionSection" style="display: none;">
+                <h2>Relationship</h2>
+                <div class="selected-nodes">
+                    <div class="node-name" id="mainPersonName">-</div>
+                    <div class="node-label">Main Person (Point of View)</div>
+                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+                        <div class="node-name" id="targetPersonName">-</div>
+                        <div class="node-label">Target Person</div>
+                    </div>
+                </div>
+
+                <div id="relationshipDisplay">
+                    <div class="info-box">No relationships found</div>
+                </div>
+
+                <div class="add-relationship-section">
+                    <h3>Add Relationship</h3>
+                    <form id="relationshipForm">
+                        <div class="form-group">
+                            <label for="relationshipType">Relationship Type</label>
+                            <select id="relationshipType">
+                                <option value="parent">Parent of</option>
+                                <option value="child">Child of</option>
+                                <option value="spouse">Spouse</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="button">Add Relationship</button>
+                        <div id="relationshipError" class="error" style="display: none;"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <div class="toolbar">
+                <button id="addNodeMode" class="button secondary active">Add Node</button>
+                <button id="selectMode" class="button secondary">Select Nodes</button>
+                <button id="panMode" class="button secondary">Pan Canvas</button>
+            </div>
+            <svg id="graphCanvas"></svg>
+        </div>
+    </div>
+
+    <div class="info-panel" id="infoPanel">
+        <div class="info-panel-header" onclick="toggleInfoPanel()">
+            <h3>Relationship Identifier Tool</h3>
+            <button class="info-panel-toggle">▼</button>
+        </div>
+        <div class="info-panel-content">
+            <h4>About</h4>
+            <p>
+                The <strong>Relationship Identifier Tool</strong> is a visual graph-based system for mapping 
+                family relationships. Create nodes (people), connect them with parent-child or spouse relationships, 
+                and the system automatically infers all other relationships (siblings, cousins, aunts/uncles, etc.).
+            </p>
+
+            <h4>How to Use</h4>
+            <ul>
+                <li><strong>Add Node Mode:</strong> Click anywhere on the canvas to create a new person</li>
+                <li><strong>Select Nodes Mode:</strong> Click nodes to select them (up to 2). The first selected is your point of view</li>
+                <li><strong>Pan Canvas Mode:</strong> Drag to move around the canvas</li>
+                <li><strong>Drag Nodes:</strong> Click and drag nodes to reposition them</li>
+            </ul>
+
+            <h4>Creating Relationships</h4>
+            <p>
+                When you select two nodes, you'll see all relationships between them. If no direct relationship 
+                exists, you can add one using the form. The system will automatically show inferred relationships 
+                (siblings, cousins, etc.) even if they're not directly connected.
+            </p>
+
+            <h4>Relationship Types</h4>
+            <ul>
+                <li><strong>Parent/Child:</strong> Direct lineage relationships</li>
+                <li><strong>Spouse:</strong> Marriage/partnership relationships</li>
+                <li><strong>Inferred:</strong> Automatically calculated (siblings, cousins, aunts/uncles, etc.)</li>
+            </ul>
+
+            <h4>Features</h4>
+            <ul>
+                <li>Automatic relationship inference (siblings, cousins with removals, etc.)</li>
+                <li>Point-of-view system (relationships shown from first selected person's perspective)</li>
+                <li>Incest detection for spouse relationships (configurable threshold)</li>
+                <li>Support for complex genealogical relationships (great-grandparents, second cousins, etc.)</li>
+            </ul>
+
+            <h4>Settings</h4>
+            <div class="form-group" style="margin-top: 12px;">
+                <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span>Incest Threshold (generations)</span>
+                    <span class="value" id="thresholdValue" style="color: #1a1a1a; font-weight: 600;">3</span>
+                </label>
+                <input type="range" id="incestThreshold" min="1" max="5" value="3" style="width: 100%; margin-bottom: 8px;">
+                <div class="info-box" style="margin-top: 8px; font-size: 0.85rem;">
+                    Relationships within this many generations are flagged as incestuous (only shown for spouses)
+                </div>
+            </div>
+
+            <div class="author">
+                <strong>Relationship Identifier Tool</strong><br>
+                by Leto-cmd
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== DATA MODELS ====================
+        class Node {
+            constructor(id, name, x, y) {
+                this.id = id;
+                this.name = name;
+                this.x = x;
+                this.y = y;
+            }
+        }
+
+        class Edge {
+            constructor(id, fromNodeId, toNodeId, type) {
+                this.id = id;
+                this.fromNodeId = fromNodeId;
+                this.toNodeId = toNodeId;
+                this.type = type; // 'parent' or 'spouse'
+            }
+        }
+
+        // ==================== RELATIONSHIP ENGINE ====================
+        class RelationshipEngine {
+            constructor() {
+                this.nodes = new Map();
+                this.edges = [];
+                this.incestThreshold = 3;
+            }
+
+            addNode(node) {
+                if (this.nodes.has(node.id)) {
+                    throw new Error('Node with this ID already exists');
+                }
+                this.nodes.set(node.id, node);
+            }
+
+            addEdge(edge) {
+                if (!this.nodes.has(edge.fromNodeId) || !this.nodes.has(edge.toNodeId)) {
+                    throw new Error('Both nodes must exist');
+                }
+
+                // Check for cycles in parent-child relationships
+                if (edge.type === 'parent') {
+                    if (this.wouldCreateCycle(edge.fromNodeId, edge.toNodeId)) {
+                        throw new Error('This would create a cycle in parentage');
+                    }
+                }
+
+                this.edges.push(edge);
+            }
+
+            wouldCreateCycle(fromId, toId) {
+                return this.isAncestor(toId, fromId);
+            }
+
+            getEdgesBetween(nodeAId, nodeBId) {
+                return this.edges.filter(e =>
+                    (e.fromNodeId === nodeAId && e.toNodeId === nodeBId) ||
+                    (e.fromNodeId === nodeBId && e.toNodeId === nodeAId) ||
+                    (e.type === 'spouse' && (
+                        (e.fromNodeId === nodeAId && e.toNodeId === nodeBId) ||
+                        (e.fromNodeId === nodeBId && e.toNodeId === nodeAId)
+                    ))
+                );
+            }
+
+            areSpouses(nodeAId, nodeBId) {
+                return this.edges.some(e =>
+                    e.type === 'spouse' &&
+                    ((e.fromNodeId === nodeAId && e.toNodeId === nodeBId) ||
+                     (e.fromNodeId === nodeBId && e.toNodeId === nodeAId))
+                );
+            }
+
+            // ==================== ANCESTOR MAPPING ====================
+            getAncestorMap(nodeId) {
+                const map = new Map();
+                const visited = new Set();
+                
+                const traverse = (currentId, depth) => {
+                    if (visited.has(currentId)) return;
+                    visited.add(currentId);
+
+                    const parentEdges = this.edges.filter(e =>
+                        e.type === 'parent' && e.toNodeId === currentId
+                    );
+
+                    for (const edge of parentEdges) {
+                        const parentId = edge.fromNodeId;
+                        if (!map.has(parentId) || map.get(parentId) > depth + 1) {
+                            map.set(parentId, depth + 1);
+                            traverse(parentId, depth + 1);
+                        }
+                    }
+                };
+
+                traverse(nodeId, 0);
+                return map;
+            }
+
+            isAncestor(ancestorId, descendantId) {
+                const ancestorMap = this.getAncestorMap(descendantId);
+                return ancestorMap.has(ancestorId);
+            }
+
+            // ==================== NEAREST COMMON ANCESTOR ====================
+            findNearestCommonAncestor(nodeAId, nodeBId) {
+                const mapA = this.getAncestorMap(nodeAId);
+                const mapB = this.getAncestorMap(nodeBId);
+
+                let nca = null;
+                let minMaxDepth = Infinity;
+
+                for (const [ancestorId, depthA] of mapA.entries()) {
+                    if (mapB.has(ancestorId)) {
+                        const depthB = mapB.get(ancestorId);
+                        const maxDepth = Math.max(depthA, depthB);
+                        if (maxDepth < minMaxDepth) {
+                            minMaxDepth = maxDepth;
+                            nca = {
+                                ancestorId,
+                                depthA,
+                                depthB,
+                                maxDepth
+                            };
+                        }
+                    }
+                }
+
+                return nca;
+            }
+
+            // ==================== RELATIONSHIP DETERMINATION ====================
+            getRelationshipFromPerspective(mainPersonId, targetPersonId) {
+                if (mainPersonId === targetPersonId) {
+                    return { type: 'self', explanation: 'Same person' };
+                }
+
+                // Check if target is a direct ancestor (parent, grandparent, etc.)
+                const ancestorDistance = this.getAncestorDistance(mainPersonId, targetPersonId);
+                if (ancestorDistance !== null && ancestorDistance > 0) {
+                    return {
+                        type: 'ancestor',
+                        distance: ancestorDistance,
+                        explanation: this.getAncestorRelationship(mainPersonId, targetPersonId, ancestorDistance)
+                    };
+                }
+
+                // Check if target is a direct descendant (child, grandchild, etc.)
+                const descendantDistance = this.getAncestorDistance(targetPersonId, mainPersonId);
+                if (descendantDistance !== null && descendantDistance > 0) {
+                    return {
+                        type: 'descendant',
+                        distance: descendantDistance,
+                        explanation: this.getDescendantRelationship(mainPersonId, targetPersonId, descendantDistance)
+                    };
+                }
+
+                // Check siblings
+                if (this.areSiblings(mainPersonId, targetPersonId)) {
+                    return {
+                        type: 'sibling',
+                        explanation: `${this.nodes.get(targetPersonId).name} is ${this.nodes.get(mainPersonId).name}'s sibling`
+                    };
+                }
+
+                // Check step-relationships (must come before aunt/uncle)
+                const stepRelationship = this.getStepRelationship(mainPersonId, targetPersonId);
+                if (stepRelationship) {
+                    return stepRelationship;
+                }
+
+                // Check aunt/uncle and niece/nephew relationships
+                const auntUncle = this.getAuntUncleRelationship(mainPersonId, targetPersonId);
+                if (auntUncle) {
+                    return auntUncle;
+                }
+
+                // Check cousin relationship
+                const nca = this.findNearestCommonAncestor(mainPersonId, targetPersonId);
+                if (nca) {
+                    return this.calculateCousinRelationshipFromPerspective(mainPersonId, targetPersonId, nca);
+                }
+
+                return {
+                    type: 'unrelated',
+                    explanation: null
+                };
+            }
+
+            // ==================== GET ALL RELATIONSHIPS (DIRECT + IN-LAW) ====================
+            getAllRelationships(mainPersonId, targetPersonId) {
+                const relationships = [];
+                
+                // Get direct relationship
+                const directRel = this.getRelationshipFromPerspective(mainPersonId, targetPersonId);
+                if (directRel.type !== 'unrelated' && directRel.explanation) {
+                    relationships.push({
+                        ...directRel,
+                        isInLaw: false
+                    });
+                }
+
+                // Get in-law relationships through spouses
+                const inLawRels = this.getInLawRelationships(mainPersonId, targetPersonId);
+                relationships.push(...inLawRels);
+
+                return relationships;
+            }
+
+            // ==================== IN-LAW RELATIONSHIP LOGIC ====================
+            getInLawRelationships(mainPersonId, targetPersonId) {
+                const inLawRels = [];
+                const mainName = this.nodes.get(mainPersonId).name;
+                const targetName = this.nodes.get(targetPersonId).name;
+                const mainSpouses = this.getSpouses(mainPersonId);
+
+                for (const spouseId of mainSpouses) {
+                    const spouseName = this.nodes.get(spouseId).name;
+                    
+                    // Get relationship from spouse's perspective to target
+                    const spouseRel = this.getRelationshipFromPerspective(spouseId, targetPersonId);
+                    
+                    if (spouseRel.type !== 'unrelated' && spouseRel.explanation) {
+                        // Convert spouse's relationship to in-law relationship
+                        const inLawRel = this.convertToInLawRelationship(
+                            mainPersonId, 
+                            targetPersonId, 
+                            spouseId, 
+                            spouseRel
+                        );
+                        if (inLawRel) {
+                            inLawRels.push({
+                                ...inLawRel,
+                                isInLaw: true,
+                                throughSpouse: spouseName
+                            });
+                        }
+                    }
+                }
+
+                return inLawRels;
+            }
+
+            convertToInLawRelationship(mainPersonId, targetPersonId, spouseId, spouseRelationship) {
+                const mainName = this.nodes.get(mainPersonId).name;
+                const targetName = this.nodes.get(targetPersonId).name;
+                const spouseName = this.nodes.get(spouseId).name;
+
+                // Don't show in-law if there's already a direct relationship
+                const directRel = this.getRelationshipFromPerspective(mainPersonId, targetPersonId);
+                if (directRel.type !== 'unrelated' && directRel.explanation) {
+                    // Check if it's the same type of relationship (don't duplicate)
+                    if (directRel.type === spouseRelationship.type) {
+                        return null;
+                    }
+                }
+
+                switch (spouseRelationship.type) {
+                    case 'parent':
+                        return {
+                            type: 'in-law-parent',
+                            explanation: `${targetName} is ${mainName}'s parent-in-law (${spouseName}'s parent)`
+                        };
+                    case 'child':
+                        return {
+                            type: 'in-law-child',
+                            explanation: `${targetName} is ${mainName}'s child-in-law (${spouseName}'s child)`
+                        };
+                    case 'sibling':
+                        return {
+                            type: 'in-law-sibling',
+                            explanation: `${targetName} is ${mainName}'s sibling-in-law (${spouseName}'s sibling)`
+                        };
+                    case 'step-parent':
+                        return {
+                            type: 'in-law-step-parent',
+                            explanation: `${targetName} is ${mainName}'s step-parent-in-law (${spouseName}'s step-parent)`
+                        };
+                    case 'step-child':
+                        return {
+                            type: 'in-law-step-child',
+                            explanation: `${targetName} is ${mainName}'s step-child-in-law (${spouseName}'s step-child)`
+                        };
+                    case 'step-sibling':
+                        return {
+                            type: 'in-law-step-sibling',
+                            explanation: `${targetName} is ${mainName}'s step-sibling-in-law (${spouseName}'s step-sibling)`
+                        };
+                    case 'aunt-uncle':
+                        return {
+                            type: 'in-law-aunt-uncle',
+                            explanation: `${targetName} is ${mainName}'s aunt/uncle-in-law (${spouseName}'s aunt/uncle)`
+                        };
+                    case 'niece-nephew':
+                        return {
+                            type: 'in-law-niece-nephew',
+                            explanation: `${targetName} is ${mainName}'s niece/nephew-in-law (${spouseName}'s niece/nephew)`
+                        };
+                    case 'cousin':
+                        return {
+                            type: 'in-law-cousin',
+                            explanation: `${targetName} is ${mainName}'s cousin-in-law (${spouseName}'s ${this.getCousinName(spouseRelationship.cousinDegree)})`
+                        };
+                    case 'ancestor':
+                        const ancestorRel = this.getGenerationName(spouseRelationship.distance, 'ancestor');
+                        return {
+                            type: 'in-law-ancestor',
+                            explanation: `${targetName} is ${mainName}'s ${ancestorRel}-in-law (${spouseName}'s ${ancestorRel})`
+                        };
+                    case 'descendant':
+                        const descendantRel = this.getGenerationName(spouseRelationship.distance, 'descendant');
+                        return {
+                            type: 'in-law-descendant',
+                            explanation: `${targetName} is ${mainName}'s ${descendantRel}-in-law (${spouseName}'s ${descendantRel})`
+                        };
+                    default:
+                        return null;
+                }
+            }
+
+            getAncestorDistance(descendantId, ancestorId) {
+                const ancestorMap = this.getAncestorMap(descendantId);
+                return ancestorMap.has(ancestorId) ? ancestorMap.get(ancestorId) : null;
+            }
+
+            getAncestorRelationship(mainPersonId, targetPersonId, distance) {
+                const main = this.nodes.get(mainPersonId);
+                const target = this.nodes.get(targetPersonId);
+                const relationship = this.getGenerationName(distance, 'ancestor');
+                return `${target.name} is ${main.name}'s ${relationship}`;
+            }
+
+            getDescendantRelationship(mainPersonId, targetPersonId, distance) {
+                const main = this.nodes.get(mainPersonId);
+                const target = this.nodes.get(targetPersonId);
+                const relationship = this.getGenerationName(distance, 'descendant');
+                return `${target.name} is ${main.name}'s ${relationship}`;
+            }
+
+            getGenerationName(distance, type) {
+                if (distance === 1) {
+                    return type === 'ancestor' ? 'parent' : 'child';
+                } else if (distance === 2) {
+                    return type === 'ancestor' ? 'grandparent' : 'grandchild';
+                } else if (distance === 3) {
+                    return type === 'ancestor' ? 'great-grandparent' : 'great-grandchild';
+                } else {
+                    const greats = distance - 2;
+                    const greatPrefix = 'great-'.repeat(greats);
+                    return type === 'ancestor' ? `${greatPrefix}grandparent` : `${greatPrefix}grandchild`;
+                }
+            }
+
+            getAuntUncleRelationship(mainPersonId, targetPersonId) {
+                // Check if target is aunt/uncle of main (target is sibling of main's parent)
+                const mainParents = this.getParents(mainPersonId);
+                for (const parent of mainParents) {
+                    if (this.areSiblings(parent, targetPersonId)) {
+                        const mainName = this.nodes.get(mainPersonId).name;
+                        const targetName = this.nodes.get(targetPersonId).name;
+                        // Determine if aunt or uncle (would need gender info, but we'll use neutral)
+                        return {
+                            type: 'aunt-uncle',
+                            explanation: `${targetName} is ${mainName}'s aunt/uncle (sibling of ${this.nodes.get(parent).name})`
+                        };
+                    }
+                }
+
+                // Check if target is niece/nephew of main (target's parent is sibling of main)
+                const targetParents = this.getParents(targetPersonId);
+                for (const parent of targetParents) {
+                    if (this.areSiblings(mainPersonId, parent)) {
+                        const mainName = this.nodes.get(mainPersonId).name;
+                        const targetName = this.nodes.get(targetPersonId).name;
+                        return {
+                            type: 'niece-nephew',
+                            explanation: `${targetName} is ${mainName}'s niece/nephew (child of ${this.nodes.get(parent).name})`
+                        };
+                    }
+                }
+
+                // Check for great-aunt/uncle and great-niece/nephew
+                // Great-aunt/uncle: target is sibling of main's grandparent
+                for (const parent of mainParents) {
+                    const grandParents = this.getParents(parent);
+                    for (const grandParent of grandParents) {
+                        if (this.areSiblings(grandParent, targetPersonId)) {
+                            const mainName = this.nodes.get(mainPersonId).name;
+                            const targetName = this.nodes.get(targetPersonId).name;
+                            return {
+                                type: 'great-aunt-uncle',
+                                explanation: `${targetName} is ${mainName}'s great-aunt/uncle`
+                            };
+                        }
+                    }
+                }
+
+                // Great-niece/nephew: target's grandparent is sibling of main
+                for (const targetParent of targetParents) {
+                    const targetGrandParents = this.getParents(targetParent);
+                    for (const targetGrandParent of targetGrandParents) {
+                        if (this.areSiblings(mainPersonId, targetGrandParent)) {
+                            const mainName = this.nodes.get(mainPersonId).name;
+                            const targetName = this.nodes.get(targetPersonId).name;
+                            return {
+                                type: 'great-niece-nephew',
+                                explanation: `${targetName} is ${mainName}'s great-niece/nephew`
+                            };
+                        }
+                    }
+                }
+
+                return null;
+            }
+
+            areSiblings(nodeAId, nodeBId) {
+                const parentsA = this.getParents(nodeAId);
+                const parentsB = this.getParents(nodeBId);
+                return parentsA.some(p => parentsB.includes(p));
+            }
+
+            getParents(nodeId) {
+                return this.edges
+                    .filter(e => e.type === 'parent' && e.toNodeId === nodeId)
+                    .map(e => e.fromNodeId);
+            }
+
+            getChildren(nodeId) {
+                return this.edges
+                    .filter(e => e.type === 'parent' && e.fromNodeId === nodeId)
+                    .map(e => e.toNodeId);
+            }
+
+            getSpouses(nodeId) {
+                return this.edges
+                    .filter(e => e.type === 'spouse' && 
+                        (e.fromNodeId === nodeId || e.toNodeId === nodeId))
+                    .map(e => e.fromNodeId === nodeId ? e.toNodeId : e.fromNodeId);
+            }
+
+            // ==================== STEP-RELATIONSHIP LOGIC ====================
+            getStepRelationship(mainPersonId, targetPersonId) {
+                const mainName = this.nodes.get(mainPersonId).name;
+                const targetName = this.nodes.get(targetPersonId).name;
+                const mainParents = this.getParents(mainPersonId);
+                const targetParents = this.getParents(targetPersonId);
+                const mainChildren = this.getChildren(mainPersonId);
+                const targetChildren = this.getChildren(targetPersonId);
+
+                // Check if target is step-parent of main
+                // Target is married to one of main's parents, but target is not also a parent of main
+                for (const parent of mainParents) {
+                    if (this.areSpouses(parent, targetPersonId)) {
+                        // Check if target is also a direct parent (if so, not a step-parent)
+                        if (!targetParents.includes(mainPersonId) && !mainParents.includes(targetPersonId)) {
+                            return {
+                                type: 'step-parent',
+                                explanation: `${targetName} is ${mainName}'s step-parent (spouse of ${this.nodes.get(parent).name})`
+                            };
+                        }
+                    }
+                }
+
+                // Check if target is step-child of main
+                // Main is married to one of target's parents, but main is not also a parent of target
+                for (const parent of targetParents) {
+                    if (this.areSpouses(mainPersonId, parent)) {
+                        // Check if main is also a direct parent (if so, not a step-child)
+                        if (!mainParents.includes(targetPersonId) && !targetParents.includes(mainPersonId)) {
+                            return {
+                                type: 'step-child',
+                                explanation: `${targetName} is ${mainName}'s step-child (child of ${this.nodes.get(parent).name})`
+                            };
+                        }
+                    }
+                }
+
+                // Check if target is step-sibling of main
+                // They share a step-parent but not a biological parent
+                const mainStepParents = this.getStepParents(mainPersonId);
+                const targetStepParents = this.getStepParents(targetPersonId);
+                
+                // Check if they share a step-parent
+                const sharedStepParent = mainStepParents.find(sp => targetStepParents.includes(sp));
+                if (sharedStepParent) {
+                    // But they don't share a biological parent
+                    if (!this.areSiblings(mainPersonId, targetPersonId)) {
+                        return {
+                            type: 'step-sibling',
+                            explanation: `${targetName} is ${mainName}'s step-sibling (both are step-children of ${this.nodes.get(sharedStepParent).name})`
+                        };
+                    }
+                }
+
+                // Also check: if main's step-parent has target as a child, and they're not biological siblings
+                for (const stepParent of mainStepParents) {
+                    const stepParentChildren = this.getChildren(stepParent);
+                    if (stepParentChildren.includes(targetPersonId) && !this.areSiblings(mainPersonId, targetPersonId)) {
+                        return {
+                            type: 'step-sibling',
+                            explanation: `${targetName} is ${mainName}'s step-sibling (child of ${this.nodes.get(stepParent).name}, who is ${mainName}'s step-parent)`
+                        };
+                    }
+                }
+
+                // And vice versa: if target's step-parent has main as a child
+                for (const stepParent of targetStepParents) {
+                    const stepParentChildren = this.getChildren(stepParent);
+                    if (stepParentChildren.includes(mainPersonId) && !this.areSiblings(mainPersonId, targetPersonId)) {
+                        return {
+                            type: 'step-sibling',
+                            explanation: `${targetName} is ${mainName}'s step-sibling (${mainName} is child of ${this.nodes.get(stepParent).name}, who is ${targetName}'s step-parent)`
+                        };
+                    }
+                }
+
+                return null;
+            }
+
+            getStepParents(nodeId) {
+                const stepParents = [];
+                const parents = this.getParents(nodeId);
+                
+                for (const parent of parents) {
+                    const parentSpouses = this.getSpouses(parent);
+                    for (const spouse of parentSpouses) {
+                        // Spouse is a step-parent if they're not also a biological parent
+                        if (!parents.includes(spouse)) {
+                            stepParents.push(spouse);
+                        }
+                    }
+                }
+                
+                return stepParents;
+            }
+
+            calculateCousinRelationshipFromPerspective(mainPersonId, targetPersonId, nca) {
+                const { depthA, depthB, ancestorId } = nca;
+                const mainDepth = nca.depthA; // depth from main person
+                const targetDepth = nca.depthB; // depth from target person
+                const minDepth = Math.min(mainDepth, targetDepth);
+                const maxDepth = Math.max(mainDepth, targetDepth);
+                const removal = maxDepth - minDepth;
+
+                if (minDepth < 2) {
+                    return {
+                        type: 'not-cousins',
+                        explanation: 'Too closely related to be cousins'
+                    };
+                }
+
+                const cousinDegree = minDepth - 1;
+                const ancestorName = this.nodes.get(ancestorId).name;
+                const mainName = this.nodes.get(mainPersonId).name;
+                const targetName = this.nodes.get(targetPersonId).name;
+
+                let explanation = '';
+                if (removal === 0) {
+                    explanation = `${targetName} is ${mainName}'s ${this.getCousinName(cousinDegree)}`;
+                } else {
+                    if (targetDepth > mainDepth) {
+                        explanation = `${targetName} is ${mainName}'s ${this.getCousinName(cousinDegree)} ${this.getRemovalName(removal)} (${targetName} is ${removal} generation${removal > 1 ? 's' : ''} further from common ancestor)`;
+                    } else {
+                        explanation = `${targetName} is ${mainName}'s ${this.getCousinName(cousinDegree)} ${this.getRemovalName(removal)} (${mainName} is ${removal} generation${removal > 1 ? 's' : ''} further from common ancestor)`;
+                    }
+                }
+
+                return {
+                    type: 'cousin',
+                    cousinDegree,
+                    removal,
+                    ancestorId,
+                    mainDepth,
+                    targetDepth,
+                    explanation
+                };
+            }
+
+            getCousinName(degree) {
+                const names = ['', 'first', 'second', 'third', 'fourth', 'fifth'];
+                return names[degree] || `${degree}th`;
+            }
+
+            getRemovalName(removal) {
+                if (removal === 1) return 'once removed';
+                if (removal === 2) return 'twice removed';
+                if (removal === 3) return 'thrice removed';
+                return `${removal} times removed`;
+            }
+
+            // ==================== INCEST DETECTION ====================
+            isIncestuous(nodeAId, nodeBId) {
+                // Only check if they're spouses
+                if (!this.areSpouses(nodeAId, nodeBId)) {
+                    return { isIncestuous: false };
+                }
+
+                // Direct ancestor relationship
+                if (this.isAncestor(nodeAId, nodeBId) || this.isAncestor(nodeBId, nodeAId)) {
+                    return {
+                        isIncestuous: true,
+                        reason: 'One is a direct ancestor of the other',
+                        explanation: this.explainIncest(nodeAId, nodeBId)
+                    };
+                }
+
+                // Siblings
+                if (this.areSiblings(nodeAId, nodeBId)) {
+                    return {
+                        isIncestuous: true,
+                        reason: 'Siblings share a parent',
+                        explanation: this.explainIncest(nodeAId, nodeBId)
+                    };
+                }
+
+                // Check NCA depth
+                const nca = this.findNearestCommonAncestor(nodeAId, nodeBId);
+                if (nca) {
+                    const maxDepth = Math.max(nca.depthA, nca.depthB);
+                    if (maxDepth <= this.incestThreshold) {
+                        return {
+                            isIncestuous: true,
+                            reason: `Share ancestor within ${this.incestThreshold} generations`,
+                            explanation: this.explainIncest(nodeAId, nodeBId, nca)
+                        };
+                    }
+                }
+
+                return { isIncestuous: false };
+            }
+
+            explainIncest(nodeAId, nodeBId, nca = null) {
+                if (!nca) {
+                    nca = this.findNearestCommonAncestor(nodeAId, nodeBId);
+                }
+
+                if (!nca) {
+                    if (this.isAncestor(nodeAId, nodeBId)) {
+                        return `${this.nodes.get(nodeAId).name} is a direct ancestor of ${this.nodes.get(nodeBId).name}`;
+                    }
+                    if (this.isAncestor(nodeBId, nodeAId)) {
+                        return `${this.nodes.get(nodeBId).name} is a direct ancestor of ${this.nodes.get(nodeAId).name}`;
+                    }
+                    if (this.areSiblings(nodeAId, nodeBId)) {
+                        return 'These individuals are siblings (share at least one parent)';
+                    }
+                }
+
+                const { depthA, depthB, ancestorId } = nca;
+                const ancestorName = this.nodes.get(ancestorId).name;
+                const maxDepth = Math.max(depthA, depthB);
+
+                let explanation = `These individuals share a common ancestor (${ancestorName}). `;
+                explanation += `${this.nodes.get(nodeAId).name} is ${depthA} generation${depthA > 1 ? 's' : ''} removed, `;
+                explanation += `and ${this.nodes.get(nodeBId).name} is ${depthB} generation${depthB > 1 ? 's' : ''} removed. `;
+                explanation += `The maximum distance is ${maxDepth} generation${maxDepth > 1 ? 's' : ''}, `;
+                explanation += `which falls within the configured incest threshold of ${this.incestThreshold} generation${this.incestThreshold > 1 ? 's' : ''}.`;
+
+                return explanation;
+            }
+        }
+
+        // ==================== VISUAL GRAPH SYSTEM ====================
+        class VisualGraph {
+            constructor(svgElement, engine) {
+                this.svg = svgElement;
+                this.engine = engine;
+                this.selectedNodeIds = [];
+                this.mode = 'add'; // 'add', 'select', 'pan'
+                this.panMode = false;
+                this.panStart = null;
+                this.viewBox = { x: 0, y: 0, scale: 1 };
+                this.draggedNodeId = null;
+                this.dragOffset = { x: 0, y: 0 };
+
+                this.setupSVG();
+                this.setupEventListeners();
+            }
+
+            setupSVG() {
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                marker.setAttribute('id', 'arrowhead');
+                marker.setAttribute('markerWidth', '10');
+                marker.setAttribute('markerHeight', '10');
+                marker.setAttribute('refX', '9');
+                marker.setAttribute('refY', '3');
+                marker.setAttribute('orient', 'auto');
+                const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                polygon.setAttribute('points', '0 0, 10 3, 0 6');
+                polygon.setAttribute('fill', '#1a1a1a');
+                marker.appendChild(polygon);
+                defs.appendChild(marker);
+                this.svg.appendChild(defs);
+            }
+
+            setupEventListeners() {
+                this.svg.addEventListener('click', (e) => this.handleCanvasClick(e));
+                this.svg.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+                this.svg.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                this.svg.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+                this.svg.addEventListener('wheel', (e) => this.handleWheel(e));
+            }
+
+            handleCanvasClick(e) {
+                if (e.target.tagName === 'circle' || e.target.tagName === 'text') {
+                    const nodeId = e.target.getAttribute('data-node-id') || 
+                                  e.target.parentElement.getAttribute('data-node-id');
+                    
+                    if (this.mode === 'select') {
+                        this.handleNodeSelection(nodeId);
+                    } else if (this.mode === 'add') {
+                        // In add mode, clicking a node does nothing
+                    }
+                } else if (this.mode === 'add' && e.target === this.svg) {
+                    // Click on empty space - add node
+                    const rect = this.svg.getBoundingClientRect();
+                    const x = (e.clientX - rect.left) / this.viewBox.scale - this.viewBox.x;
+                    const y = (e.clientY - rect.top) / this.viewBox.scale - this.viewBox.y;
+                    this.addNodeAtPosition(x, y);
+                }
+            }
+
+            handleNodeSelection(nodeId) {
+                if (this.selectedNodeIds.includes(nodeId)) {
+                    // Deselect if already selected
+                    this.selectedNodeIds = this.selectedNodeIds.filter(id => id !== nodeId);
+                } else {
+                    // Add to selection (max 2)
+                    if (this.selectedNodeIds.length >= 2) {
+                        // Clear selection if trying to select a third
+                        this.selectedNodeIds = [nodeId];
+                    } else {
+                        this.selectedNodeIds.push(nodeId);
+                    }
+                }
+                this.render();
+                this.updateRelationshipDisplay();
+            }
+
+            handleMouseDown(e) {
+                if (e.target.tagName === 'circle' || e.target.tagName === 'text') {
+                    const nodeId = e.target.getAttribute('data-node-id') || 
+                                  e.target.parentElement.getAttribute('data-node-id');
+                    const node = this.engine.nodes.get(nodeId);
+                    if (node && this.mode !== 'add') {
+                        this.draggedNodeId = nodeId;
+                        const rect = this.svg.getBoundingClientRect();
+                        this.dragOffset = {
+                            x: (e.clientX - rect.left) / this.viewBox.scale - node.x - this.viewBox.x,
+                            y: (e.clientY - rect.top) / this.viewBox.scale - node.y - this.viewBox.y
+                        };
+                    }
+                } else if (this.panMode) {
+                    this.panStart = { x: e.clientX, y: e.clientY };
+                }
+            }
+
+            handleMouseMove(e) {
+                if (this.draggedNodeId) {
+                    const node = this.engine.nodes.get(this.draggedNodeId);
+                    if (node) {
+                        const rect = this.svg.getBoundingClientRect();
+                        node.x = (e.clientX - rect.left) / this.viewBox.scale - this.viewBox.x - this.dragOffset.x;
+                        node.y = (e.clientY - rect.top) / this.viewBox.scale - this.viewBox.y - this.dragOffset.y;
+                        this.render();
+                    }
+                } else if (this.panMode && this.panStart) {
+                    const dx = (e.clientX - this.panStart.x) / this.viewBox.scale;
+                    const dy = (e.clientY - this.panStart.y) / this.viewBox.scale;
+                    this.viewBox.x -= dx;
+                    this.viewBox.y -= dy;
+                    this.panStart = { x: e.clientX, y: e.clientY };
+                    this.render();
+                }
+            }
+
+            handleMouseUp(e) {
+                if (this.draggedNodeId) {
+                    this.draggedNodeId = null;
+                }
+                if (this.panStart) {
+                    this.panStart = null;
+                }
+            }
+
+            handleWheel(e) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                this.viewBox.scale *= delta;
+                this.viewBox.scale = Math.max(0.1, Math.min(5, this.viewBox.scale));
+                this.render();
+            }
+
+            addNodeAtPosition(x, y) {
+                const name = prompt('Enter name for new node:');
+                if (!name) return;
+
+                const nodeId = `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const node = new Node(nodeId, name, x, y);
+                
+                try {
+                    this.engine.addNode(node);
+                    this.render();
+                } catch (err) {
+                    alert(err.message);
+                }
+            }
+
+            updateRelationshipDisplay() {
+                const section = document.getElementById('selectionSection');
+                const mainName = document.getElementById('mainPersonName');
+                const targetName = document.getElementById('targetPersonName');
+                const display = document.getElementById('relationshipDisplay');
+
+                if (this.selectedNodeIds.length === 0) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                section.style.display = 'block';
+
+                if (this.selectedNodeIds.length === 1) {
+                    const node = this.engine.nodes.get(this.selectedNodeIds[0]);
+                    mainName.textContent = node.name;
+                    targetName.textContent = '-';
+                    display.innerHTML = '<div class="info-box">Select a second node to view relationships</div>';
+                    return;
+                }
+
+                const mainId = this.selectedNodeIds[0];
+                const targetId = this.selectedNodeIds[1];
+                const mainNode = this.engine.nodes.get(mainId);
+                const targetNode = this.engine.nodes.get(targetId);
+
+                mainName.textContent = mainNode.name;
+                targetName.textContent = targetNode.name;
+
+                // Get all direct edges between them
+                const directEdges = this.engine.getEdgesBetween(mainId, targetId);
+                
+                // Get all relationships (direct + in-law)
+                const allRelationships = this.engine.getAllRelationships(mainId, targetId);
+                const directRelationships = allRelationships.filter(r => !r.isInLaw);
+                const inLawRelationships = allRelationships.filter(r => r.isInLaw);
+
+                let html = '';
+
+                // Show direct relationships section
+                if (directEdges.length > 0) {
+                    html += '<ul class="relationship-list">';
+                    for (const edge of directEdges) {
+                        let relationshipText = '';
+                        if (edge.type === 'parent') {
+                            if (edge.fromNodeId === mainId) {
+                                relationshipText = `${targetNode.name} is ${mainNode.name}'s child`;
+                            } else {
+                                relationshipText = `${targetNode.name} is ${mainNode.name}'s parent`;
+                            }
+                        } else if (edge.type === 'spouse') {
+                            relationshipText = `${targetNode.name} is ${mainNode.name}'s spouse`;
+                        }
+                        html += `
+                            <li class="relationship-item">
+                                <strong>${relationshipText}</strong>
+                                <div class="type">Direct relationship</div>
+                            </li>
+                        `;
+                    }
+                    html += '</ul>';
+                } else {
+                    // No direct relationships set
+                    html += '<div class="info-box" style="margin-bottom: 16px;">No relationships set</div>';
+                }
+
+                // Show inferred direct relationships (not from edges)
+                const inferredDirect = directRelationships.filter(r => {
+                    // Check if already shown as a direct edge
+                    return !directEdges.some(e => {
+                        if (e.type === 'parent' && (r.type === 'parent' || r.type === 'child' || r.type === 'ancestor' || r.type === 'descendant')) {
+                            return true;
+                        }
+                        if (e.type === 'spouse' && r.type === 'spouse') {
+                            return true;
+                        }
+                        return false;
+                    });
+                });
+
+                if (inferredDirect.length > 0) {
+                    html += '<div style="margin-top: 16px;"><strong style="color: #666; font-size: 0.85rem;">INFERRED:</strong></div>';
+                    for (const rel of inferredDirect) {
+                        html += `
+                            <div class="relationship-item" style="margin-top: 8px;">
+                                <strong>${rel.explanation}</strong>
+                                <div class="type">Inferred relationship</div>
+                            </div>
+                        `;
+                    }
+                } else if (directEdges.length === 0 && directRelationships.length === 0) {
+                    // No inferred relationship found
+                    html += '<div class="info-box" style="margin-top: 16px;">No inferred relationships</div>';
+                }
+
+                // Show in-law relationships (grouped by spouse)
+                if (inLawRelationships.length > 0) {
+                    // Group by spouse
+                    const bySpouse = {};
+                    for (const rel of inLawRelationships) {
+                        if (!bySpouse[rel.throughSpouse]) {
+                            bySpouse[rel.throughSpouse] = [];
+                        }
+                        bySpouse[rel.throughSpouse].push(rel);
+                    }
+
+                    for (const [spouseName, rels] of Object.entries(bySpouse)) {
+                        html += '<div style="margin-top: 16px;"><strong style="color: #666; font-size: 0.85rem;">IN-LAW (through ' + spouseName + '):</strong></div>';
+                        for (const rel of rels) {
+                            html += `
+                                <div class="relationship-item" style="margin-top: 8px;">
+                                    <strong>${rel.explanation}</strong>
+                                    <div class="type">In-law relationship</div>
+                                </div>
+                            `;
+                        }
+                    }
+                }
+
+                // Show incest warning only if they're spouses
+                const incestCheck = this.engine.isIncestuous(mainId, targetId);
+                if (incestCheck.isIncestuous) {
+                    html += `
+                        <div class="incest-warning" style="margin-top: 16px;">
+                            <h4>⚠ Incestuous Relationship</h4>
+                            <p><strong>Reason:</strong> ${incestCheck.reason}</p>
+                            <p style="margin-top: 8px;">${incestCheck.explanation}</p>
+                        </div>
+                    `;
+                }
+
+                display.innerHTML = html;
+            }
+
+            render() {
+                this.svg.innerHTML = '';
+                this.setupSVG();
+
+                const width = this.svg.clientWidth || 800;
+                const height = this.svg.clientHeight || 600;
+
+                this.svg.setAttribute('viewBox', 
+                    `${this.viewBox.x} ${this.viewBox.y} ${width / this.viewBox.scale} ${height / this.viewBox.scale}`);
+
+                // Render edges
+                for (const edge of this.engine.edges) {
+                    this.renderEdge(edge);
+                }
+
+                // Render nodes
+                for (const node of this.engine.nodes.values()) {
+                    this.renderNode(node);
+                }
+            }
+
+            renderEdge(edge) {
+                const fromNode = this.engine.nodes.get(edge.fromNodeId);
+                const toNode = this.engine.nodes.get(edge.toNodeId);
+                if (!fromNode || !toNode) return;
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', fromNode.x);
+                line.setAttribute('y1', fromNode.y);
+                line.setAttribute('x2', toNode.x);
+                line.setAttribute('y2', toNode.y);
+                
+                const incestCheck = this.engine.isIncestuous(edge.fromNodeId, edge.toNodeId);
+                if (incestCheck.isIncestuous && edge.type === 'spouse') {
+                    line.setAttribute('class', 'edge incest');
+                } else if (edge.type === 'parent') {
+                    line.setAttribute('class', 'edge parent-child');
+                } else {
+                    line.setAttribute('class', 'edge spouse');
+                }
+
+                line.setAttribute('data-edge-id', edge.id);
+                this.svg.appendChild(line);
+            }
+
+            renderNode(node) {
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                const isSelected = this.selectedNodeIds.includes(node.id);
+                group.setAttribute('class', `node ${isSelected ? 'selected' : ''}`);
+                group.setAttribute('data-node-id', node.id);
+
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', node.x);
+                circle.setAttribute('cy', node.y);
+                circle.setAttribute('r', '20');
+                circle.setAttribute('data-node-id', node.id);
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', node.x);
+                text.setAttribute('y', node.y + 35);
+                text.textContent = node.name;
+                text.setAttribute('data-node-id', node.id);
+
+                group.appendChild(circle);
+                group.appendChild(text);
+                this.svg.appendChild(group);
+            }
+
+            setMode(mode) {
+                this.mode = mode;
+                this.panMode = (mode === 'pan');
+            }
+        }
+
+        // ==================== APPLICATION INITIALIZATION ====================
+        const engine = new RelationshipEngine();
+        const svg = document.getElementById('graphCanvas');
+        const graph = new VisualGraph(svg, engine);
+
+        // Form handlers
+        document.getElementById('nodeForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const nameInput = document.getElementById('nodeName');
+            const name = nameInput.value.trim();
+            const errorDiv = document.getElementById('nodeError');
+
+            if (!name) {
+                errorDiv.textContent = 'Name is required';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const nodeId = `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const node = new Node(nodeId, name, 400, 300);
+                engine.addNode(node);
+                nameInput.value = '';
+                errorDiv.style.display = 'none';
+                graph.render();
+            } catch (err) {
+                errorDiv.textContent = err.message;
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        // Relationship form handler
+        document.getElementById('relationshipForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (graph.selectedNodeIds.length !== 2) return;
+
+            const mainId = graph.selectedNodeIds[0];
+            const targetId = graph.selectedNodeIds[1];
+            const type = document.getElementById('relationshipType').value;
+            const errorDiv = document.getElementById('relationshipError');
+
+            try {
+                let edge;
+                if (type === 'parent') {
+                    edge = new Edge(`edge-${Date.now()}`, mainId, targetId, 'parent');
+                } else if (type === 'child') {
+                    edge = new Edge(`edge-${Date.now()}`, targetId, mainId, 'parent');
+                } else {
+                    edge = new Edge(`edge-${Date.now()}`, mainId, targetId, 'spouse');
+                }
+
+                engine.addEdge(edge);
+                document.getElementById('relationshipType').value = 'parent';
+                errorDiv.style.display = 'none';
+                graph.render();
+                graph.updateRelationshipDisplay();
+            } catch (err) {
+                errorDiv.textContent = err.message;
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        // Toolbar handlers
+        document.getElementById('addNodeMode').addEventListener('click', () => {
+            graph.setMode('add');
+            document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+            document.getElementById('addNodeMode').classList.add('active');
+        });
+
+        document.getElementById('selectMode').addEventListener('click', () => {
+            graph.setMode('select');
+            document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+            document.getElementById('selectMode').classList.add('active');
+        });
+
+        document.getElementById('panMode').addEventListener('click', () => {
+            graph.setMode('pan');
+            document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+            document.getElementById('panMode').classList.add('active');
+        });
+
+        // Incest threshold slider
+        document.getElementById('incestThreshold').addEventListener('input', (e) => {
+            engine.incestThreshold = parseInt(e.target.value);
+            document.getElementById('thresholdValue').textContent = e.target.value;
+            graph.render();
+            graph.updateRelationshipDisplay();
+        });
+
+        // Initial render
+        graph.render();
+
+        // Info panel toggle
+        window.toggleInfoPanel = function() {
+            const panel = document.getElementById('infoPanel');
+            panel.classList.toggle('collapsed');
+        };
+    </script>
+</body>
+</html>
