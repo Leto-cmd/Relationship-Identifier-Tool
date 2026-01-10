@@ -185,19 +185,54 @@
             fill: none;
         }
 
-        .edge.parent-child {
+        .edge line.parent-child {
             stroke: #1a1a1a;
             marker-end: url(#arrowhead);
         }
 
-        .edge.spouse {
+        .edge line.spouse {
             stroke: #666;
             stroke-dasharray: 5,5;
         }
 
-        .edge.incest {
+        .edge line.incest {
             stroke: #d32f2f;
             stroke-width: 3;
+        }
+
+        .edge-delete-button {
+            cursor: pointer;
+        }
+
+        .edge-delete-button circle {
+            fill: #ffffff;
+            stroke: #d32f2f;
+            stroke-width: 2;
+        }
+
+        .edge-delete-button {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .edge:hover .edge-delete-button {
+            opacity: 1;
+        }
+
+        .edge-delete-button:hover circle {
+            fill: #d32f2f;
+        }
+
+        .edge-delete-button text {
+            fill: #d32f2f;
+            font-size: 16px;
+            font-weight: bold;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+
+        .edge-delete-button:hover text {
+            fill: #ffffff;
         }
 
         .relationship-list {
@@ -491,6 +526,8 @@
                 <li><strong>Select Nodes Mode:</strong> Click nodes to select them (up to 2). The first selected is your point of view</li>
                 <li><strong>Pan Canvas Mode:</strong> Drag to move around the canvas</li>
                 <li><strong>Drag Nodes:</strong> Click and drag nodes to reposition them</li>
+                <li><strong>Delete Nodes:</strong> Right-click on a node to delete it and all its relationships</li>
+                <li><strong>Delete Relationships:</strong> Hover over a relationship line and click the "-" button to delete it</li>
             </ul>
 
             <h4>Creating Relationships</h4>
@@ -582,6 +619,26 @@
                 }
 
                 this.edges.push(edge);
+            }
+
+            removeNode(nodeId) {
+                if (!this.nodes.has(nodeId)) {
+                    throw new Error('Node does not exist');
+                }
+                // Remove all edges connected to this node
+                this.edges = this.edges.filter(e => 
+                    e.fromNodeId !== nodeId && e.toNodeId !== nodeId
+                );
+                // Remove the node
+                this.nodes.delete(nodeId);
+            }
+
+            removeEdge(edgeId) {
+                const index = this.edges.findIndex(e => e.id === edgeId);
+                if (index === -1) {
+                    throw new Error('Edge does not exist');
+                }
+                this.edges.splice(index, 1);
             }
 
             wouldCreateCycle(fromId, toId) {
@@ -1114,7 +1171,8 @@
 
             getCousinName(degree) {
                 const names = ['', 'first', 'second', 'third', 'fourth', 'fifth'];
-                return names[degree] || `${degree}th`;
+                const name = names[degree] || `${degree}th`;
+                return name ? `${name} cousin` : 'cousin';
             }
 
             getRemovalName(removal) {
@@ -1236,6 +1294,7 @@
                 this.svg.addEventListener('mousemove', (e) => this.handleMouseMove(e));
                 this.svg.addEventListener('mouseup', (e) => this.handleMouseUp(e));
                 this.svg.addEventListener('wheel', (e) => this.handleWheel(e));
+                this.svg.addEventListener('contextmenu', (e) => this.handleRightClick(e));
             }
 
             handleCanvasClick(e) {
@@ -1326,6 +1385,28 @@
                 this.viewBox.scale *= delta;
                 this.viewBox.scale = Math.max(0.1, Math.min(5, this.viewBox.scale));
                 this.render();
+            }
+
+            handleRightClick(e) {
+                e.preventDefault();
+                if (e.target.tagName === 'circle' || e.target.tagName === 'text') {
+                    const nodeId = e.target.getAttribute('data-node-id') || 
+                                  e.target.parentElement.getAttribute('data-node-id');
+                    if (nodeId && this.engine.nodes.has(nodeId)) {
+                        const node = this.engine.nodes.get(nodeId);
+                        if (confirm(`Delete "${node.name}" and all their relationships?`)) {
+                            try {
+                                this.engine.removeNode(nodeId);
+                                // Remove from selection if selected
+                                this.selectedNodeIds = this.selectedNodeIds.filter(id => id !== nodeId);
+                                this.render();
+                                this.updateRelationshipDisplay();
+                            } catch (err) {
+                                alert(err.message);
+                            }
+                        }
+                    }
+                }
             }
 
             addNodeAtPosition(x, y) {
@@ -1503,6 +1584,11 @@
                 const toNode = this.engine.nodes.get(edge.toNodeId);
                 if (!fromNode || !toNode) return;
 
+                // Create edge group
+                const edgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                edgeGroup.setAttribute('class', 'edge');
+                edgeGroup.setAttribute('data-edge-id', edge.id);
+
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                 line.setAttribute('x1', fromNode.x);
                 line.setAttribute('y1', fromNode.y);
@@ -1518,8 +1604,46 @@
                     line.setAttribute('class', 'edge spouse');
                 }
 
-                line.setAttribute('data-edge-id', edge.id);
-                this.svg.appendChild(line);
+                // Calculate midpoint for delete button
+                const midX = (fromNode.x + toNode.x) / 2;
+                const midY = (fromNode.y + toNode.y) / 2;
+
+                // Create delete button
+                const deleteButton = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                deleteButton.setAttribute('class', 'edge-delete-button');
+                deleteButton.setAttribute('data-edge-id', edge.id);
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', midX);
+                circle.setAttribute('cy', midY);
+                circle.setAttribute('r', '12');
+                
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', midX);
+                text.setAttribute('y', midY);
+                text.setAttribute('dy', '0.35em');
+                text.textContent = '−';
+                
+                deleteButton.appendChild(circle);
+                deleteButton.appendChild(text);
+                
+                // Add click handler to delete button
+                deleteButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm('Delete this relationship?')) {
+                        try {
+                            this.engine.removeEdge(edge.id);
+                            this.render();
+                            this.updateRelationshipDisplay();
+                        } catch (err) {
+                            alert(err.message);
+                        }
+                    }
+                });
+
+                edgeGroup.appendChild(line);
+                edgeGroup.appendChild(deleteButton);
+                this.svg.appendChild(edgeGroup);
             }
 
             renderNode(node) {
